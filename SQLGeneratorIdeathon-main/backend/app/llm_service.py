@@ -57,26 +57,43 @@ def _parse_sql_from_response(text: str) -> str:
 
 async def generate_sql_gemini(prompt: str, schema_info: Optional[str] = None) -> Tuple[str, float]:
     """Generate SQL using Google Gemini."""
-    if not settings.GEMINI_API_KEY:
-        raise ValueError("Gemini API key not configured")
+    api_key = (settings.GEMINI_API_KEY or "").strip()
+    if not api_key:
+        raise ValueError("Gemini API key not configured. Set GEMINI_API_KEY in your environment or .env.")
 
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    model = genai.GenerativeModel("models/gemini-2.5-flash")
+    genai.configure(api_key=api_key)
+    # Use a stable model name (gemini-1.5-flash works with most keys; gemini-2.0-flash if available)
+    model = genai.GenerativeModel("gemini-1.5-flash")
 
     user_content = prompt
     if schema_info:
         user_content = f"Schema:\n{schema_info}\n\nUser request: {prompt}"
 
     start = time.perf_counter()
-    resp = await model.generate_content_async(
-        [
-            SYSTEM_PROMPT,
-            user_content,
-        ]
-    )
+    try:
+        resp = await model.generate_content_async(
+            [
+                SYSTEM_PROMPT,
+                user_content,
+            ]
+        )
+    except Exception as e:
+        msg = str(e).lower()
+        if "api_key" in msg or "invalid" in msg or "403" in msg or "401" in msg:
+            raise ValueError(
+                "Invalid or expired Gemini API key. Check GEMINI_API_KEY at "
+                "https://aistudio.google.com/apikey and set it in Render Environment or .env."
+            ) from e
+        raise
+
     elapsed_ms = (time.perf_counter() - start) * 1000
 
     text = (resp.text or "").strip()
+    if not text:
+        raise ValueError(
+            "Gemini returned no text (e.g. blocked or empty). Try a different prompt or check the API response."
+        )
+
     sql = _parse_sql_from_response(text)
     return sql, elapsed_ms
 
