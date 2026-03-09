@@ -4,8 +4,9 @@ services:
   - type: web
     name: sql-generator
     runtime: docker
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
+    # Use Dockerfile inside this folder so a single Dockerfile lives with frontend/ and backend/
+    dockerfilePath: ./SQLGeneratorIdeathon-main/Dockerfile
+    dockerContext: ./SQLGeneratorIdeathon-main
 
     envVars:
       - key: JWT_SECRET
